@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'map_generator = map_generator.map_generator:main',
         ],
     },
 )

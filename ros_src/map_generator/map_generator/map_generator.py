@@ -14,7 +14,9 @@ class MapGenerator(Node):
         self.box_map.info.resolution = 0.1 # map resolution [m/cell]
         self.box_map.info.width = 500 # map width [m]
         self.box_map.info.height  = 500 # map height [m]
-        # origin initialized to 0,0,0 with 0 quaternion
+        self.box_map.header.frame_id = 'map'
+        self.box_map.data = [0]*500*500 # default unoccupied
+        # origin initialized to 0,0,0 with identity quaternion
 
         self.box_arr = PoseArray()
         self.map_pub = self.create_publisher(OccupancyGrid, 'box_map', 10)
@@ -23,22 +25,27 @@ class MapGenerator(Node):
             'boxes',
             self.box_callback,
             10)
+        self.timer = self.create_timer(0.1, self.publish_once)
+
+    def publish_once(self):
+        self.map_pub.publish(self.box_map)
+        self.timer.cancel() # cancel timer so it doesn't run again
         
-    def listener_callback(self, msg):
+    def box_callback(self, msg):
         new_boxes = []
         for p in msg.poses:
             if p not in self.box_arr.poses:
                 self.box_arr.poses.append(p)
                 new_boxes.append(p)
         if len(new_boxes):
-            self.box_map = self.update_map(new_boxes)
+            self.update_map(new_boxes)
             self.map_pub.publish(self.box_map)
 
     def update_map(self, new_boxes):
         for b in new_boxes:
             indices = self.calculate_indices(b.position.x, b.position.y)
             for i in indices:
-                self.box_map.data[i] = 1 # occupied
+                self.box_map.data[i] = 100 # occupied with probability 1
     
     def calculate_indices(self, bx, by):
         # We are not detecting boxes per size, assume large ones to get enough clearance
@@ -58,8 +65,8 @@ class MapGenerator(Node):
             for j in range(-half_side, half_side):
                 x = x_map + i
                 y = y_map + j
-                if x < w and y < h:
-                    indices.append(y*w + x) # see OccupancyGrid documentation
+                if x < w and y < h and x >= 0 and y >= 0:
+                    indices.append(int(y*w + x)) # see OccupancyGrid documentation
         return indices
 
 def main(args=None):
