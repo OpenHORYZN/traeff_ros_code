@@ -126,7 +126,7 @@ class StateMachine {
 
       // TODO replace with input from file
       nodes_left = std::queue<int>(std::deque<int>{
-          101,102,103,104,105,106,107,108,109,110
+          101,102,103,104,105,106,107,108,109,110,101
       });
 
       // Relative positions to bottom left. (X,Y)
@@ -348,8 +348,21 @@ class Executor : public rclcpp::Node{
             return;
         }
 
-        auto x_control = x_pid->get_action(tvecs[i][0]);
-        auto y_control = y_pid->get_action(tvecs[i][1]);
+        double x_cam = tvecs[i][0];
+        double y_cam = tvecs[i][1];
+
+        // Camera → FC frame (90° rotation)
+        double x_fc =  y_cam;
+        double y_fc = -x_cam;
+
+        /*
+        // Camera → FC frame (-90° rotation)
+        double x_fc = -y_cam;
+        double y_fc =  x_cam;
+        */
+
+        auto x_control = x_pid->get_action(x_fc);
+        auto y_control = y_pid->get_action(y_fc);
         
         vec_vel.twist.linear.x = x_control;
         vec_vel.twist.linear.y = y_control;
@@ -392,14 +405,23 @@ class Executor : public rclcpp::Node{
     }
 
     void detection_end_cb(std_msgs::msg::Empty::ConstSharedPtr) {
+      RCLCPP_INFO(this->get_logger(), "Detection finished for node %d", current_node);
+
       current_node = stm.get_next_node();
 
       if(current_node == -1) {
+        RCLCPP_INFO(this->get_logger(), "Mission complete. Landing...");
         this->stm.transition(StateMachine::Land);
+        this->land();
         return;
       }
-      this->stm.transition(StateMachine::Resume);
-    }
+
+  RCLCPP_INFO(this->get_logger(), "Next node: %d", current_node);
+
+  if(!this->stm.transition(StateMachine::Resume)) {
+    RCLCPP_WARN(this->get_logger(), "Invalid transition to Resume");
+  }
+}
 
   public:
     Executor() : rclcpp::Node("MainMission") {
@@ -477,6 +499,17 @@ class Executor : public rclcpp::Node{
       dictionary_ = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_5X5_250);
 
       print_all_params();
+      // Start mission automatically
+      current_node = stm.get_next_node();   // should be 101
+
+      if (current_node != -1) {
+        RCLCPP_INFO(this->get_logger(), "Starting mission. First node: %d", current_node);
+
+        if (stm.transition(StateMachine::Takeoff)) {
+          this->takeoff(flight_height);
+        }
+      }
+
     }
 
 };
