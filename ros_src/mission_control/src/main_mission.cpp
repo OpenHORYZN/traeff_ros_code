@@ -416,12 +416,12 @@ class Executor : public rclcpp::Node{
         return;
       }
 
-  RCLCPP_INFO(this->get_logger(), "Next node: %d", current_node);
+      RCLCPP_INFO(this->get_logger(), "Next node: %d", current_node);
 
-  if(!this->stm.transition(StateMachine::Resume)) {
-    RCLCPP_WARN(this->get_logger(), "Invalid transition to Resume");
-  }
-}
+      if(!this->stm.transition(StateMachine::Resume)) {
+        RCLCPP_WARN(this->get_logger(), "Invalid transition to Resume");
+      }
+    }
 
   public:
     Executor() : rclcpp::Node("MainMission") {
