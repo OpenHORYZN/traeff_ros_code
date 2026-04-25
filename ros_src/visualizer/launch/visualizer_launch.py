@@ -9,6 +9,12 @@ def generate_launch_description():
         get_package_share_directory('visualizer'),
         'rviz',
         'visualizer.rviz')
+    
+    map_saver_node = Node(
+        package='visualizer',
+        executable='map_exporter',
+        name='map_exporter'
+    )
 
     return LaunchDescription([
         Node(
@@ -16,5 +22,6 @@ def generate_launch_description():
             executable='rviz2',
             name='rviz2',
             arguments=['-d', rviz_config_dir], # Pass config file
-            output='screen')
+            output='screen'),
+        map_saver_node
     ])

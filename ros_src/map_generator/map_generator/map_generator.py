@@ -4,7 +4,7 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import PoseArray
 from nav_msgs.msg import OccupancyGrid
-
+from rclpy.qos import QoSProfile, DurabilityPolicy
 
 class MapGenerator(Node):
 
@@ -19,7 +19,11 @@ class MapGenerator(Node):
         # origin initialized to 0,0,0 with identity quaternion
 
         self.box_arr = PoseArray()
-        self.map_pub = self.create_publisher(OccupancyGrid, 'box_map', 10)
+        map_qos = QoSProfile(
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
+        )
+        self.map_pub = self.create_publisher(OccupancyGrid, 'box_map', map_qos)
         self.box_sub = self.create_subscription(
             PoseArray,
             'boxes',

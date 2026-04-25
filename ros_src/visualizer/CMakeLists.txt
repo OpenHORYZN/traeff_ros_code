@@ -7,6 +7,8 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(nav_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -23,6 +25,9 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+add_executable(map_exporter src/map_exporter.cpp)
+ament_target_dependencies(map_exporter rclcpp nav_msgs)
+
 install(DIRECTORY
   rviz
   DESTINATION share/${PROJECT_NAME})
@@ -30,5 +35,9 @@ install(DIRECTORY
 install(DIRECTORY
   launch
   DESTINATION share/${PROJECT_NAME})
+
+install(TARGETS
+  map_exporter
+  DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
