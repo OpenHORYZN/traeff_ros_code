@@ -1,58 +1,55 @@
+# ── Multi-arch base ───────────────────────────────────────────────────────── #
 ARG TARGETARCH
 FROM ros:humble-perception AS base_amd64
 FROM arm64v8/ros:humble-perception AS base_arm64
 FROM base_${TARGETARCH} AS final
+
+# Use bash everywhere
+SHELL ["/bin/bash", "-c"]
 
 # ── Environment ───────────────────────────────────────────────────────────── #
 ENV ROS_WS=/ros_ws
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR $ROS_WS
 
-# Fix broken apt keys / certificates
+# ── Fix apt + install core tools ──────────────────────────────────────────── #
 RUN rm -rf /var/lib/apt/lists/* && \
     apt-get clean && \
-    apt-get update -o Acquire::AllowInsecureRepositories=true \
-                   -o Acquire::AllowDowngradeToInsecureRepositories=true && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         gnupg \
-        lsb-release && \
-    rm -rf /var/lib/apt/lists/*
-
-# ── System & build tools ──────────────────────────────────────────────────── #
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    git \
-    pkg-config \
-    wget \
-    unzip \
-    python3-colcon-common-extensions \
-    python3-dev \
-    python3-numpy \
-    libgtk-3-dev \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
-    libv4l-dev \
-    libx264-dev \
-    libjpeg-dev \
-    libpng-dev \
-    libtiff-dev \
-    gfortran \
-    libopenexr-dev \
-    libatlas-base-dev \
+        lsb-release \
+        build-essential \
+        cmake \
+        git \
+        pkg-config \
+        wget \
+        unzip \
+        python3-colcon-common-extensions \
+        python3-dev \
+        python3-numpy \
+        libgtk-3-dev \
+        libavcodec-dev \
+        libavformat-dev \
+        libswscale-dev \
+        libv4l-dev \
+        libx264-dev \
+        libjpeg-dev \
+        libpng-dev \
+        libtiff-dev \
+        gfortran \
+        libopenexr-dev \
+        libatlas-base-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# ── OpenCV 4.8 with contrib (includes ArUco in objdetect) ────────────────── #
-
+# ── OpenCV (prefer system, fallback to source) ─────────────────────────────── #
 ARG OPENCV_VERSION=4.8.0
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libopencv-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    || true
+    && rm -rf /var/lib/apt/lists/* || true
 
-# If the distro OpenCV is < 4.8, build 4.8 from source
 RUN INSTALLED=$(pkg-config --modversion opencv4 2>/dev/null || echo "0.0.0") && \
     MAJOR=$(echo $INSTALLED | cut -d. -f1) && \
     MINOR=$(echo $INSTALLED | cut -d. -f2) && \
@@ -78,12 +75,12 @@ RUN INSTALLED=$(pkg-config --modversion opencv4 2>/dev/null || echo "0.0.0") && 
       make -j$(nproc) && \
       make install && \
       ldconfig && \
-      cd / && rm -rf /tmp/opencv* ; \
+      rm -rf /tmp/opencv* ; \
     else \
-      echo "OpenCV ${INSTALLED} already >= 4.8, skipping source build." ; \
+      echo "OpenCV ${INSTALLED} >= 4.8, skipping build."; \
     fi
 
-# ── ROS 2 Humble packages ─────────────────────────────────────────────────── #
+# ── ROS 2 dependencies ───────────────────────────────────────────────────── #
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-rclcpp \
     ros-humble-nav-msgs \
@@ -96,30 +93,49 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-camera-info-manager \
     && rm -rf /var/lib/apt/lists/*
 
-# ── RealSense SDK ───────────────────────────────────────────── #
-RUN git clone https://github.com/realsenseai/librealsense.git && \
-    cd librealsense && mkdir build && cd build && \
-    cmake .. && make -j$(nproc) && make install && ldconfig
+# ── RealSense SDK (system install) ───────────────────────────────────────── #
+RUN git clone https://github.com/realsenseai/librealsense.git /tmp/librealsense && \
+    cd /tmp/librealsense && mkdir build && cd build && \
+    cmake .. && make -j$(nproc) && make install && ldconfig && \
+    rm -rf /tmp/librealsense
 
-# ── Copy source & build ───────────────────────────────────────────────────── #
+# Ensure linker can find it
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+ENV CMAKE_PREFIX_PATH=/usr/local:$CMAKE_PREFIX_PATH
+
+# ── Workspace setup ───────────────────────────────────────────────────────── #
 COPY ros_src/ $ROS_WS/src/
 
-RUN cd $ROS_WS/src/ && git clone https://github.com/realsenseai/realsense-ros.git -b ros2-master && \
-    sudo rosdep init \
-    rosdep update  \
-    rosdep install -i --from-path src --rosdistro $ROS_DISTRO --skip-keys=librealsense2 -y
+RUN apt-get update && apt-get install -y \
+    ros-humble-xacro \
+    ros-humble-rviz2 \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN /bin/bash -c "\
-    source /opt/ros/$ROS_DISTRO/setup.bash && \
+RUN apt-get update && apt-get install -y software-properties-common && \
+    add-apt-repository universe && \
+    apt-get update
+
+# ── ROS dependencies (robust rosdep usage) ───────────────────────────────── #
+RUN source /opt/ros/$ROS_DISTRO/setup.bash && \
+    cd $ROS_WS/src && \
+    git clone https://github.com/realsenseai/realsense-ros.git -b ros2-master && \
+    rosdep update && \
+    rosdep install -i --from-path $ROS_WS/src \
+        --rosdistro $ROS_DISTRO \
+        --skip-keys="librealsense2 launch_pytest" \
+        --ignore-src \
+        -y
+
+# ── Build workspace ──────────────────────────────────────────────────────── #
+RUN source /opt/ros/$ROS_DISTRO/setup.bash && \
     cd $ROS_WS && \
     colcon build \
-      --symlink-install \
-      --cmake-args \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-    "
+        --symlink-install \
+        --cmake-args \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-# ── Auto-source ───────────────────────────────────────────────────────────── #
+# ── Auto-source environment ─────────────────────────────────────────────── #
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc && \
-    echo "source $ROS_WS/install/setup.bash"      >> ~/.bashrc
-
+    echo "source $ROS_WS/install/setup.bash" >> ~/.bashrc
