@@ -1,40 +1,36 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
-
 def generate_launch_description():
     return LaunchDescription([
-
         Node(
             package='mission_control',
             executable='main_mission',
             name='main_mission',
             output='screen',
-
             parameters=[{
                 # Topics
-                "odometry_topic": "/mavros/local_position/odom",
-                "image_topic": "/camera/image_raw",
-                "camera_info_topic": "/camera/camera_info",
-                "twist_topic": "/mavros/setpoint_attitude/cmd_vel",
+                "odometry_topic":    "/mavros/local_position/odom",
+                "image_topic":       "/camera/camera/color/image_raw",
+                "camera_info_topic": "/camera/camera/color/camera_info",
+                "twist_topic":       "/mavros/setpoint_attitude/cmd_vel",
 
-                # Vision
+                # Vision — marker_size in metres
                 "marker_size": 0.15,
 
                 # PID X
-                "kp_x": 0.5,
-                "ki_x": 0.0,
-                "kd_x": 0.1,
+                "kp_x": 0.2,
+                "ki_x": 0.01,
+                "kd_x": 0.01,
 
                 # PID Y
-                "kp_y": 0.5,
-                "ki_y": 0.0,
-                "kd_y": 0.1,
+                "kp_y": 0.2,
+                "ki_y": 0.01,
+                "kd_y": 0.01,
 
                 # Flight
-                "down_speed": -0.2,
-                "flight_height": 2.3,
+                "down_speed":    -0.2,
+                "flight_height":  2.3,
             }]
         )
-
     ])
