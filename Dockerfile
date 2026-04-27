@@ -104,6 +104,11 @@ RUN git clone https://github.com/realsenseai/librealsense.git && \
 # ── Copy source & build ───────────────────────────────────────────────────── #
 COPY ros_src/ $ROS_WS/src/
 
+RUN cd $ROS_WS/src/ && git clone https://github.com/realsenseai/realsense-ros.git -b ros2-master && \
+    sudo rosdep init \
+    rosdep update  \
+    rosdep install -i --from-path src --rosdistro $ROS_DISTRO --skip-keys=librealsense2 -y
+
 RUN /bin/bash -c "\
     source /opt/ros/$ROS_DISTRO/setup.bash && \
     cd $ROS_WS && \
