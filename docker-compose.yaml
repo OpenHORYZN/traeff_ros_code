@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  mission_control:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mission_control
+
+    working_dir: /ros2_ws
+
+    tty: true
+    stdin_open: true
+
+    environment:
+      - ROS_DOMAIN_ID=23
+
+    command: bash
