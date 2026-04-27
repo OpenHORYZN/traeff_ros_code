@@ -449,11 +449,6 @@ class Executor : public rclcpp::Node {
       }
 
       RCLCPP_INFO(this->get_logger(), "Next node: %d", current_node);
-<<<<<<< HEAD
-
-      if(!this->stm.transition(StateMachine::Resume)) {
-        RCLCPP_WARN(this->get_logger(), "Invalid transition to Resume");
-=======
       if (!stm.transition(StateMachine::Resume)) {
         RCLCPP_WARN(this->get_logger(), "Invalid transition to Resume");
       }
@@ -467,7 +462,6 @@ class Executor : public rclcpp::Node {
           RCLCPP_INFO(this->get_logger(), "%s: %s",
             name.c_str(), param.value_to_string().c_str());
         }
->>>>>>> 94d46c8 (Adapted code to older opencv api)
       }
     }
 
