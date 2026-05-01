@@ -166,17 +166,13 @@ class Executor : public rclcpp::Node {
     int current_node = -1;
 
     // ── startup state ─────────────────────────────────────────────────── //
-    // Phase 0: stream setpoints for STARTUP_TICKS ticks (PX4 needs this
-    //          before it will accept an OFFBOARD switch).
-    // Phase 1: request OFFBOARD + arm, wait for both to confirm.
-    // Phase 2: climb to flight_height via setpoint, then begin mission.
-    rclcpp::TimerBase::SharedPtr heartbeat_timer_;   // 10 Hz, runs forever
+    rclcpp::TimerBase::SharedPtr heartbeat_timer_;
     int  startup_count_      = 0;
     bool offboard_confirmed_ = false;
     bool armed_confirmed_    = false;
     bool arm_requested_      = false;
     bool takeoff_complete_   = false;
-    static constexpr int STARTUP_TICKS = 20;         // 2 s @ 10 Hz
+    static constexpr int STARTUP_TICKS = 20;
 
     // ── alignment timer ───────────────────────────────────────────────── //
     rclcpp::TimerBase::SharedPtr alignment_timer_;
@@ -200,10 +196,10 @@ class Executor : public rclcpp::Node {
     rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr         detection_over_sub_;
     rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr      state_sub_;
-    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr heading_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr       heading_sub_;
 
     double current_heading_deg_ = 0.0;
-    bool heading_received_ = false;
+    bool   heading_received_    = false;
 
     rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr             hover_ready_pub_;
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr vel_pub_;
@@ -217,6 +213,10 @@ class Executor : public rclcpp::Node {
 
     cv::Ptr<cv::aruco::Dictionary>         dictionary_;
     cv::Ptr<cv::aruco::DetectorParameters> detector_params_;
+
+    // ── last-known tag pose cache ──────────────────────────────────────── //
+    // Keyed by tag ID so the cache survives node transitions gracefully.
+    std::unordered_map<int, cv::Vec3d> last_known_tvec_;
 
     // ────────────────────────────────────────────────────────────────────── //
     //  Publish a zero-velocity setpoint (heartbeat)
@@ -243,7 +243,7 @@ class Executor : public rclcpp::Node {
 
       // ── Phase 1: request OFFBOARD + arm, wait for confirmation ────────── //
       if (!offboard_confirmed_ || !armed_confirmed_) {
-        publish_zero();   // keep stream alive while waiting
+        publish_zero();
 
         if (!offboard_confirmed_) {
           auto req = std::make_shared<mavros_msgs::srv::SetMode::Request>();
@@ -284,7 +284,6 @@ class Executor : public rclcpp::Node {
           cmd.twist.linear.z = up_speed;
           vel_pub_->publish(cmd);
         } else {
-          // Reached target altitude
           publish_zero();
           takeoff_complete_ = true;
           stm.transition(StateMachine::Takeoff);
@@ -303,7 +302,7 @@ class Executor : public rclcpp::Node {
         return;
       }
 
-      // ── Phase 3: mission running — keepalive only during Hover ────────── //
+      // ── Phase 3: mission running — keepalive only during Hover/Landing ── //
       if (stm.state == StateMachine::Hover || stm.state == StateMachine::Landing) {
         publish_zero();
       }
@@ -330,7 +329,7 @@ class Executor : public rclcpp::Node {
     //  Sensor callbacks
     // ────────────────────────────────────────────────────────────────────── //
     void state_cb(mavros_msgs::msg::State::ConstSharedPtr msg) {
-      vehicle_state     = msg;
+      vehicle_state       = msg;
       offboard_confirmed_ = (msg->mode == "OFFBOARD");
       armed_confirmed_    = msg->armed;
     }
@@ -358,12 +357,12 @@ class Executor : public rclcpp::Node {
 
     void image_cb(sensor_msgs::msg::Image::ConstSharedPtr img_msg) {
       geometry_msgs::msg::TwistStamped vec_vel;
-      vec_vel.header.stamp = this->now();
+      vec_vel.header.stamp   = this->now();
       vec_vel.twist.linear.x = 0.0;
       vec_vel.twist.linear.y = 0.0;
       vec_vel.twist.linear.z = 0.0;
 
-      // ── state guard ───────────────────────────────────────────── //
+      // ── state guard ───────────────────────────────────────────────────── //
       if (stm.state != StateMachine::Flying &&
           stm.state != StateMachine::Landing)
       {
@@ -373,14 +372,14 @@ class Executor : public rclcpp::Node {
 
       if (!heading_received_) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                            "No compass heading yet");
+          "No compass heading yet");
         vel_pub_->publish(vec_vel);
         return;
       }
 
       if (!current_odometry) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                            "No odometry");
+          "No odometry");
         vel_pub_->publish(vec_vel);
         return;
       }
@@ -390,7 +389,7 @@ class Executor : public rclcpp::Node {
         return;
       }
 
-      // ── image processing ─────────────────────────────────────── //
+      // ── image processing ──────────────────────────────────────────────── //
       cv_bridge_image_ = cv_bridge::toCvCopy(img_msg, "bgr8");
       image_ = cv_bridge_image_->image;
       cv::cvtColor(image_, gray_, cv::COLOR_BGR2GRAY);
@@ -399,12 +398,7 @@ class Executor : public rclcpp::Node {
       std::vector<std::vector<cv::Point2f>> corners, rejected;
       cv::aruco::detectMarkers(gray_, dictionary_, corners, ids, detector_params_);
 
-      if (ids.empty()) {
-        vel_pub_->publish(vec_vel);
-        return;
-      }
-
-      // ── solvePnP ─────────────────────────────────────────────── //
+      // ── solvePnP for all detected markers ─────────────────────────────── //
       cv::Mat camera_matrix, dist_coeffs;
       if (!get_camera_params(camera_matrix, dist_coeffs)) {
         vel_pub_->publish(vec_vel);
@@ -420,29 +414,50 @@ class Executor : public rclcpp::Node {
       std::vector<cv::Vec3d> rvecs(ids.size()), tvecs(ids.size());
       for (size_t k = 0; k < ids.size(); ++k) {
         cv::solvePnP(obj_pts, corners[k],
-                    camera_matrix, dist_coeffs,
-                    rvecs[k], tvecs[k]);
+                     camera_matrix, dist_coeffs,
+                     rvecs[k], tvecs[k]);
+
+        // Cache every detected tag's tvec while we have it
+        last_known_tvec_[ids[k]] = tvecs[k];
       }
 
-      // ── find target ───────────────────────────────────────────── //
+      // ── resolve target tvec (live or cached) ──────────────────────────── //
+      cv::Vec3d active_tvec;
+      bool using_cached = false;
+
+      // Try to find the target tag in this frame
       size_t i = 0;
       bool found = false;
       for (; i < ids.size(); ++i) {
         if (ids[i] == current_node) { found = true; break; }
       }
 
-      if (!found || i >= tvecs.size()) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
-                            "Tag with id %d not found", current_node);
-        vel_pub_->publish(vec_vel);
-        return;
+      if (found) {
+        active_tvec = tvecs[i];
+      } else {
+        // Fall back to the last known position for this tag
+        auto cache_it = last_known_tvec_.find(current_node);
+        if (cache_it != last_known_tvec_.end()) {
+          active_tvec  = cache_it->second;
+          using_cached = true;
+          RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 500,
+            "Tag %d lost — using last known position (x=%.3f y=%.3f z=%.3f)",
+            current_node,
+            active_tvec[0], active_tvec[1], active_tvec[2]);
+        } else {
+          // No live detection and no cache — nothing we can do
+          RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
+            "Tag %d not found and no cached position available", current_node);
+          vel_pub_->publish(vec_vel);
+          return;
+        }
       }
 
-      // ── coordinate transforms ─────────────────────────────────── //
-      double x_cam = tvecs[i][0];
-      double y_cam = tvecs[i][1];
+      // ── coordinate transforms ─────────────────────────────────────────── //
+      double x_cam = active_tvec[0];
+      double y_cam = active_tvec[1];
 
-      double x_cam_corr = x_cam;
+      double x_cam_corr =  x_cam;
       double y_cam_corr = -y_cam;
 
       double cam_yaw = camera_yaw_deg_ * M_PI / 180.0;
@@ -455,19 +470,23 @@ class Executor : public rclcpp::Node {
       double x_world =  x_body * cos(yaw) - y_body * sin(yaw);
       double y_world =  x_body * sin(yaw) + y_body * cos(yaw);
 
-      // ── PID ───────────────────────────────────────────────────── //
+      // ── PID ───────────────────────────────────────────────────────────── //
       double x_control = x_pid->get_action(x_world);
       double y_control = y_pid->get_action(y_world);
 
       vec_vel.twist.linear.x = x_control;
       vec_vel.twist.linear.y = y_control;
 
-      // ── alignment logic ───────────────────────────────────────── //
-      bool aligned = (std::abs(x_cam) < aruco_tolerance && std::abs(y_cam) < aruco_tolerance);
+      // ── alignment logic ───────────────────────────────────────────────── //
+      // Only consider "aligned" when we have a live detection to avoid acting
+      // on a stale cached pose that may be far from reality.
+      bool aligned = !using_cached &&
+                     (std::abs(x_cam) < aruco_tolerance &&
+                      std::abs(y_cam) < aruco_tolerance);
 
       if (aligned) {
         if (stm.state == StateMachine::Landing) {
-          if (tvecs[i][2] <= 0.7) {
+          if (active_tvec[2] <= 0.7) {
             stm.transition(StateMachine::Touchdown);
             this->land();
           } else {
@@ -498,13 +517,13 @@ class Executor : public rclcpp::Node {
               });
           }
 
-          // stop movement while aligned
+          // Stop movement while aligned
           vec_vel.twist.linear.x = 0.0;
           vec_vel.twist.linear.y = 0.0;
         }
       }
 
-      // ── ALWAYS publish ───────────────────────────────────────── //
+      // ── ALWAYS publish ────────────────────────────────────────────────── //
       vel_pub_->publish(vec_vel);
     }
 
@@ -541,19 +560,12 @@ class Executor : public rclcpp::Node {
       }
     }
 
-    void heading_cb(const std_msgs::msg::Float64::SharedPtr msg)
-    {
+    void heading_cb(const std_msgs::msg::Float64::SharedPtr msg) {
       current_heading_deg_ = msg->data;
-      heading_received_ = true;
-
-      // Optional debug (throttled)
+      heading_received_    = true;
       RCLCPP_INFO_THROTTLE(
-        this->get_logger(),
-        *this->get_clock(),
-        2000,
-        "Heading: %.2f deg",
-        current_heading_deg_
-      );
+        this->get_logger(), *this->get_clock(), 2000,
+        "Heading: %.2f deg", current_heading_deg_);
     }
 
   public:
@@ -574,12 +586,11 @@ class Executor : public rclcpp::Node {
       this->declare_parameter("kp_y",  0.0);
       this->declare_parameter("ki_y",  0.0);
       this->declare_parameter("kd_y",  0.0);
-      this->declare_parameter("up_speed",       0.3);
-      this->declare_parameter("down_speed",    -0.1);
-      this->declare_parameter("flight_height",  2.3);
+      this->declare_parameter("up_speed",        0.3);
+      this->declare_parameter("down_speed",      -0.1);
+      this->declare_parameter("flight_height",    2.3);
       this->declare_parameter("aruco_tolerance",  0.2);
-      //camera_yaw_deg_
-      this->declare_parameter("camera_yaw_deg",  0.0);
+      this->declare_parameter("camera_yaw_deg",   0.0);
 
       kp_x = this->get_parameter("kp_x").as_double();
       ki_x = this->get_parameter("ki_x").as_double();
@@ -589,12 +600,11 @@ class Executor : public rclcpp::Node {
       kd_y = this->get_parameter("kd_y").as_double();
 
       camera_yaw_deg_ = this->get_parameter("camera_yaw_deg").as_double();
-      up_speed      = this->get_parameter("up_speed").as_double();
-      down_speed    = this->get_parameter("down_speed").as_double();
-      flight_height = this->get_parameter("flight_height").as_double();
-      marker_size   = static_cast<float>(
+      up_speed        = this->get_parameter("up_speed").as_double();
+      down_speed      = this->get_parameter("down_speed").as_double();
+      flight_height   = this->get_parameter("flight_height").as_double();
+      marker_size     = static_cast<float>(
         this->get_parameter("marker_size").as_double());
-
       aruco_tolerance = this->get_parameter("aruco_tolerance").as_double();
 
       x_pid = std::make_shared<PID>("X_PID", this->get_clock(), kp_x, ki_x, kd_x);
@@ -629,10 +639,8 @@ class Executor : public rclcpp::Node {
         std::bind(&Executor::detection_end_cb, this, std::placeholders::_1));
 
       heading_sub_ = this->create_subscription<std_msgs::msg::Float64>(
-        "/mavros/global_position/compass_hdg",
-        qos,
-        std::bind(&Executor::heading_cb, this, std::placeholders::_1)
-      );
+        "/mavros/global_position/compass_hdg", qos,
+        std::bind(&Executor::heading_cb, this, std::placeholders::_1));
 
       // ── publishers ────────────────────────────────────────────────── //
       vel_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(
@@ -649,7 +657,6 @@ class Executor : public rclcpp::Node {
 
       print_all_params();
 
-      // ── start 10 Hz heartbeat — runs for the entire mission lifetime ── //
       RCLCPP_INFO(this->get_logger(),
         "Starting heartbeat. Pre-streaming setpoints for %.1f s...",
         STARTUP_TICKS * 0.1);

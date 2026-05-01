@@ -6,7 +6,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    
+    '''
     realsense_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             FindPackageShare('realsense2_camera'), '/launch/rs_launch.py'
@@ -19,7 +19,7 @@ def generate_launch_description():
             'rgb_camera.color_fps':    '30',
         }.items()
     )
-    
+    '''
     mission_control_node = Node(
         package='mission_control',
         executable='main_mission',
