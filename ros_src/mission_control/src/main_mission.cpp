@@ -460,7 +460,7 @@ class Executor : public rclcpp::Node {
       double x_cam_corr =  x_cam;
       double y_cam_corr = -y_cam;
 
-      double cam_yaw = camera_yaw_deg_ * M_PI / 180.0;
+      double cam_yaw = -camera_yaw_deg_ * M_PI / 180.0;
 
       double x_body =  x_cam_corr * cos(cam_yaw) + y_cam_corr * sin(cam_yaw);
       double y_body = -x_cam_corr * sin(cam_yaw) + y_cam_corr * cos(cam_yaw);
