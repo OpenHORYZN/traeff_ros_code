@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
 project(mission_control)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -8,23 +7,23 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # ── ROS 2 dependencies ────────────────────────────────────────────────────── #
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp      REQUIRED)
-find_package(nav_msgs    REQUIRED)
-find_package(mavros_msgs REQUIRED)
-find_package(cv_bridge   REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(std_msgs    REQUIRED)
+find_package(ament_cmake  REQUIRED)
+find_package(rclcpp       REQUIRED)
+find_package(nav_msgs     REQUIRED)
+find_package(mavros_msgs  REQUIRED)
+find_package(cv_bridge    REQUIRED)
+find_package(sensor_msgs  REQUIRED)
+find_package(std_msgs     REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
-# ── OpenCV 4.8 (system install on Jetson) ────────────────────────────────── #
-find_package(OpenCV 4.8 REQUIRED
+# ── OpenCV 4.5 (apt / Jetson system install) ─────────────────────────────── #
+find_package(OpenCV 4.5 REQUIRED
   COMPONENTS
     core
     imgproc
     highgui
     calib3d
-    objdetect   # contains ArUco in 4.8+
+    aruco       # ← separate contrib module in 4.5, was part of objdetect in 4.8
 )
 
 # ── Executable ───────────────────────────────────────────────────────────── #
