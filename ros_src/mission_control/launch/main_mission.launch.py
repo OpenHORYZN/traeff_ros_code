@@ -6,7 +6,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    '''
+    
     realsense_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             FindPackageShare('realsense2_camera'), '/launch/rs_launch.py'
@@ -19,7 +19,7 @@ def generate_launch_description():
             'rgb_camera.color_fps':    '30',
         }.items()
     )
-    '''
+    
     mission_control_node = Node(
         package='mission_control',
         executable='main_mission',
@@ -28,19 +28,19 @@ def generate_launch_description():
         parameters=[{
             # Topics
             "odometry_topic":    "/mavros/local_position/odom",
-            "image_topic":       "/world/lawn/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/image",
-            "camera_info_topic": "/world/lawn/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/camera_info",
+            "image_topic":       "",
+            "camera_info_topic": "",
             "twist_topic":       "/mavros/setpoint_velocity/cmd_vel",
             # Vision — marker_size in metres
             "marker_size": 0.5,
             # PID X
-            "kp_x": 0.4,
+            "kp_x": 0.5,
             "ki_x": 0.15,
-            "kd_x": 0.01,
+            "kd_x": 0.1,
             # PID Y
-            "kp_y": 0.4,
+            "kp_y": 0.5,
             "ki_y": 0.15,
-            "kd_y": 0.01,
+            "kd_y": 0.1,
             # Flight
             "down_speed":   -0.2,
             "up_speed": 1.0,

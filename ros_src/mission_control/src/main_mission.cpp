@@ -318,6 +318,15 @@ class Executor : public rclcpp::Node {
     }
 
     void land() {
+      while(std::abs(current_odometry->pose.pose.position.z) > 0.3) {
+        geometry_msgs::msg::TwistStamped vec_vel;
+        vec_vel.header.stamp   = this->now();
+        vec_vel.twist.linear.x = 0.0;
+        vec_vel.twist.linear.y = 0.0;
+        vec_vel.twist.linear.z = -0.1;
+        vel_pub_->publish(vec_vel);
+        
+      }
       wait_for_services();
       auto mode_req = std::make_shared<mavros_msgs::srv::SetMode::Request>();
       mode_req->custom_mode = "AUTO.LAND";
