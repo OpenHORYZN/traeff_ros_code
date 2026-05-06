@@ -28,8 +28,8 @@ def generate_launch_description():
         parameters=[{
             # Topics
             "odometry_topic":    "/mavros/local_position/odom",
-            "image_topic":       "",
-            "camera_info_topic": "",
+            "image_topic":       "/world/lawn/model/x500_mono_cam_down_0/link/camera_link/sensor/imager/image",
+            "camera_info_topic": "/world/lawn/model/x500_mono_cam_down_0/link/camera_link/sensor/imager/camera_info",
             "twist_topic":       "/mavros/setpoint_velocity/cmd_vel",
             # Vision — marker_size in metres
             "marker_size": 0.5,
@@ -46,7 +46,8 @@ def generate_launch_description():
             "up_speed": 1.0,
             "flight_height": 3.3,
             "camera_yaw_deg": 0.0,
-            "aruco_tolerance": 0.2
+            "aruco_tolerance": 0.2,
+            "use_sim_time": False
         }]
     )
 
