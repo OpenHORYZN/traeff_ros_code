@@ -52,6 +52,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        #realsense_launch,
+        realsense_launch,
         mission_control_node,
     ])
