@@ -521,9 +521,6 @@ class Executor : public rclcpp::Node {
     void heading_cb(const std_msgs::msg::Float64::SharedPtr msg) {
       current_heading_deg_ = msg->data;
       heading_received_    = true;
-      RCLCPP_INFO_THROTTLE(
-        this->get_logger(), *this->get_clock(), 2000,
-        "Heading: %.2f deg", current_heading_deg_);
     }
 
   public:
