@@ -122,7 +122,7 @@ class StateMachine {
       state = Landed;
 
       nodes_left = std::queue<int>(std::deque<int>{
-        101,103,102,105,106,103,104,103,101
+        106,109,106
       });
 
       // Relative positions to bottom-left corner (X, Y)
@@ -258,6 +258,7 @@ class Executor : public rclcpp::Node {
       }
 
       // ── Phase 2: climb to flight_height via velocity setpoint ─────────── //
+      // ── Phase 2: climb to flight_height via velocity setpoint ─────────── //
       if (!takeoff_complete_) {
         if (!current_odometry) {
           publish_zero();
@@ -268,23 +269,40 @@ class Executor : public rclcpp::Node {
         RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 500,
           "[Phase 2] Climbing — z=%.2f / %.2f m", current_z, flight_height);
 
+        geometry_msgs::msg::TwistStamped cmd;
+        cmd.header.stamp = this->now();
+
+        // ── XY: hold over tag while climbing ──────────────────────────────── //
+        if (camera_info && !last_known_tvec_.empty()) {
+          auto it = last_known_tvec_.find(current_node);
+          if (it != last_known_tvec_.end()) {
+            const auto & tvec = it->second;
+            double cam_x = tvec[0];
+            double cam_y = -tvec[1];
+            double angle = -camera_yaw_deg_ * M_PI / 180.0;
+            double frd_x = cam_y * cos(angle) - cam_x * sin(angle);
+            double frd_y = cam_y * sin(angle) + cam_x * cos(angle);
+            cmd.twist.linear.x =  x_pid->get_action(frd_x);
+            cmd.twist.linear.y = -y_pid->get_action(frd_y);
+          }
+        }
+
+        // ── Z: climb or finish ────────────────────────────────────────────── //
         if (current_z < flight_height - 0.15) {
-          geometry_msgs::msg::TwistStamped cmd;
-          cmd.header.stamp   = this->now();
           cmd.twist.linear.z = up_speed;
           vel_pub_->publish(cmd);
         } else {
           publish_zero();
           takeoff_complete_ = true;
           stm.transition(StateMachine::Takeoff);
-          stm.transition(StateMachine::ReachAltitude);  // Landed→TakingOff→Hover
+          stm.transition(StateMachine::ReachAltitude);
 
           current_node = stm.get_next_node();
           if (current_node != -1) {
             RCLCPP_INFO(this->get_logger(),
               "[Phase 2] Altitude reached. Starting mission, first node: %d",
               current_node);
-            stm.transition(StateMachine::Resume);        // Hover→Flying
+            stm.transition(StateMachine::Resume);
           } else {
             RCLCPP_WARN(this->get_logger(), "Node queue empty after takeoff!");
           }
@@ -617,7 +635,7 @@ class Executor : public rclcpp::Node {
         STARTUP_TICKS * 0.1);
 
       heartbeat_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(10),
+        std::chrono::milliseconds(20),
         std::bind(&Executor::heartbeat_cb, this));
     }
 };
