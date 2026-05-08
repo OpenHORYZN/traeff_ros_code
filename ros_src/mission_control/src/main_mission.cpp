@@ -203,7 +203,6 @@ class Executor : public rclcpp::Node {
 
     rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr             hover_ready_pub_;
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr vel_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr          imgs_;
 
     rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr     mode_client_;
     rclcpp::Client<mavros_msgs::srv::CommandBool>::SharedPtr arm_client_;
@@ -445,7 +444,6 @@ class Executor : public rclcpp::Node {
                       std::abs(cam_y) < aruco_tolerance);
 
       if (aligned) {
-        imgs_->publish(img_msg);
         if (stm.state == StateMachine::Landing) {
           if (active_tvec[2] <= 0.7) {
             stm.transition(StateMachine::Touchdown);
@@ -605,9 +603,6 @@ class Executor : public rclcpp::Node {
 
       hover_ready_pub_ = this->create_publisher<std_msgs::msg::Empty>(
         "/main_mission/detection_start", 10);
-
-      imgs_ = this->create_publisher<sensor_msgs::msg::Image>(
-        "/main_mission/aligned_image", 10);
 
       // ── service clients ───────────────────────────────────────────── //
       mode_client_ = this->create_client<mavros_msgs::srv::SetMode>(
