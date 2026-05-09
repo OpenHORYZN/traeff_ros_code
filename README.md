@@ -3,6 +3,7 @@
 ### How to run:
  ```
  pip install ompl
+ pip install opencv-python
  cd ros_src
  colcon build
  source install/setup.bash
