@@ -20,6 +20,7 @@ class MapGenerator(Node):
         self.origin = Pose()
         self.origin.position.x = -5.0
         self.origin.position.y = -1.0
+        self.box_map.info.origin = self.origin
 
         self.box_arr = PoseArray()
         map_qos = QoSProfile(

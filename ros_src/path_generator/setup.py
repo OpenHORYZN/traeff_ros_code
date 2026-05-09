@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'path_generator = path_generator.path_generator:main',
         ],
     },
 )
